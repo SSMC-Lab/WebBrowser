@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">网页浏览器</string>
+
+    <string name="go_to">去到</string>
+    <string name="distance">距离</string>
+    <string name="font_size">字体大小</string>
+    <string name="ok">确定</string>
+    <string name="brightness">亮度</string>
+    <string name="size_factor">尺寸因子</string>
+</resources>
