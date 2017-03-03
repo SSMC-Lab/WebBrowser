@@ -8,4 +8,5 @@
     <string name="ok">确定</string>
     <string name="brightness">亮度</string>
     <string name="size_factor">尺寸因子</string>
+    <string name="brightness_factor">亮度因子</string>
 </resources>

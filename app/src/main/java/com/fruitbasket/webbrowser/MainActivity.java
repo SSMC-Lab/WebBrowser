@@ -6,9 +6,14 @@ import java.util.List;
 import android.app.Activity;
 import android.hardware.Camera;
 import android.hardware.Camera.Size;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
@@ -38,6 +43,10 @@ public class MainActivity extends Activity implements MessageListener {
     public static final String CAM_SIZE_HEIGHT = "intent_cam_size_height";
     public static final String AVG_NUM = "intent_avg_num";
     public static final String PROBANT_NAME = "intent_probant_name";
+    private static final int BRIGHTNESS_FACTOR_DEFAULT=1;
+    private static final int FONT_SIZE_FACTOR_DEFAULT=1;
+
+    private SensorManager sensorManager;
 
     private RelativeLayout part1;
     private LinearLayout part2;
@@ -50,10 +59,15 @@ public class MainActivity extends Activity implements MessageListener {
     private EditText url;
     private EditText fontSize;
     private Button fontSizeOk;
-    private EditText brightness;
-    private Button brightnessOk;
     private EditText sizeFactor;
     private Button sizeFactorOk;
+    private TextView sizeView;
+    private EditText brightness;
+    private Button brightnessOk;
+    private EditText brightnessFactor;
+    private Button brightnessFactorOk;
+    private TextView backgroundBrightness;
+    private TextView brightnessView;
     private WebView webView;
 
     private float _currentDevicePosition;
@@ -61,7 +75,9 @@ public class MainActivity extends Activity implements MessageListener {
     private int _cameraWidth;
     private int _avgNum;
     private float distToFace;
-    private int factor=1;
+    private float brightnessValue;///环境光亮度值
+    private int fontSizeFactor =FONT_SIZE_FACTOR_DEFAULT;///后期可取消这两个值
+    private int bFactor =BRIGHTNESS_FACTOR_DEFAULT;///
 
     private final static DecimalFormat _decimalFormater = new DecimalFormat("0.0");
     /**
@@ -90,6 +106,7 @@ public class MainActivity extends Activity implements MessageListener {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         initViews();
+        sensorManager=(SensorManager)getSystemService(SENSOR_SERVICE);
         // ATTENTION: This was auto-generated to implement the App Indexing API.
         // See https://g.co/AppIndexing/AndroidStudio for more information.
         client = new GoogleApiClient.Builder(this).addApi(AppIndex.API).build();
@@ -133,6 +150,11 @@ public class MainActivity extends Activity implements MessageListener {
         param.setPreviewSize(_cameraWidth, _cameraHeight);
         _cam.setParameters(param);
         _mySurfaceView.setCamera(_cam);
+
+        //注册光传感器
+        sensorManager.registerListener(new MySensorEventListener(),
+                sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT),
+                SensorManager.SENSOR_DELAY_GAME);
     }
 
     @Override
@@ -197,13 +219,22 @@ public class MainActivity extends Activity implements MessageListener {
         fontSizeOk = (Button) findViewById(R.id.font_size_ok);
         fontSizeOk.setOnClickListener(listener);
 
+        sizeFactor=(EditText)findViewById(R.id.size_factor);
+        sizeFactorOk=(Button)findViewById(R.id.size_factor_ok);
+        sizeFactorOk.setOnClickListener(listener);
+
+        sizeView =(TextView)findViewById(R.id.size_view);
+
         brightness=(EditText)findViewById(R.id.brightness);
         brightnessOk=(Button)findViewById(R.id.brightness_ok);
         brightnessOk.setOnClickListener(listener);
 
-        sizeFactor=(EditText)findViewById(R.id.size_factor);
-        sizeFactorOk=(Button)findViewById(R.id.size_factor_ok);
-        sizeFactorOk.setOnClickListener(listener);
+        brightnessFactor=(EditText)findViewById(R.id.brightness_factor);
+        brightnessFactorOk=(Button)findViewById(R.id.brightness_ok);
+        brightnessFactorOk.setOnClickListener(listener);///写处理
+
+        backgroundBrightness=(TextView)findViewById(R.id.background_brightness);
+        brightnessView =(TextView)findViewById(R.id.brightness_view);
 
         webView = (WebView) findViewById(R.id.web_view);
         webView.setWebViewClient(new WebViewClient() {
@@ -214,6 +245,10 @@ public class MainActivity extends Activity implements MessageListener {
         });
     }
 
+    /**
+     *
+     * @param brightness
+     */
     private void setBrightness(float brightness) {
         WindowManager.LayoutParams lp = getWindow().getAttributes();
         lp.screenBrightness = brightness;
@@ -260,19 +295,62 @@ public class MainActivity extends Activity implements MessageListener {
         float fontRatio = message.getDistToFace() / 29.7f;
         _currentDistanceView.setTextSize(fontRatio * 20);
 
+
         int size;
         double ratio1;
         double ratio2;
+        DisplayMetrics metrics = new DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
+
+        //自动变化屏幕的亮度
+        final double ds=Math.sqrt(
+                Math.pow(metrics.widthPixels/metrics.xdpi,2)+
+                        Math.pow(metrics.heightPixels/metrics.ydpi,2)
+        );
+        Log.i(TAG,"screen inch+="+ds);
+
+        final int cvr=1;///应更改
+        final double vd0=ds/(
+                Math.sqrt(
+                    Math.pow((double)metrics.widthPixels/(double)metrics.heightPixels,2)+1
+                )
+                        *cvr
+                        *Math.tan(1D/60D)
+        );
+        Log.i(TAG,"vd0=="+vd0);
+
+        final double vdp=message.getDistToFace();
+        final int p=1;
+        double lb=brightnessValue;
+        double l0=lb*10D/7D;
+        double lp=lb+Math.pow(vdp/(p*vd0),2)*(l0-lb);
+        Log.i(TAG,"lp=="+lp);
+
+        if(backgroundBrightness!=null){
+            backgroundBrightness.setText(String.valueOf(lb));
+        }
+
+        if(brightnessView!=null){
+            brightnessView.setText(String.valueOf(lp*bFactor));
+        }
+
+        setBrightness((float)(lp* bFactor));
+
+        //更新网页浏览器的字体大小
         ratio1=0.47;//calibri
-        ratio2=96.0/(double)(getResources().getDisplayMetrics().densityDpi);
+        ratio2=96.0/(double)(metrics.densityDpi);
         size=(int)(((1/Math.sqrt(3))*message.getDistToFace())/(ratio1*ratio2));
-        Log.d(TAG,"dpi="+getResources().getDisplayMetrics().densityDpi);
+        Log.d(TAG,"dpi="+metrics.densityDpi);
         Log.d(TAG,"ratio2="+ratio2);
         Log.d(TAG,"size="+size);
 
+        if(sizeView!=null){
+            sizeView.setText(String.valueOf(size));
+        }
+
         if (webView != null) {
             WebSettings settings = webView.getSettings();
-            settings.setTextZoom(size*factor);
+            settings.setTextZoom(size* fontSizeFactor);
         }
         else{
             Log.d(TAG,"webView is null");
@@ -357,29 +435,53 @@ public class MainActivity extends Activity implements MessageListener {
                     }
                     break;
 
+                case R.id.size_factor_ok:
+                    Log.i(TAG,"size_factor_ok has been clicked");
+                    String sizeFactorString=sizeFactor.getText().toString().trim();
+                    if(sizeFactorString!=null
+                            && TextUtils.isEmpty(sizeFactorString)==false){
+                        fontSizeFactor =Integer.parseInt(sizeFactorString);
+                    }
+                    break;
+
                 case R.id.brightness_ok:
                     Log.i(TAG,"brightness_ok has been clicked.");
                     String brightnessString=brightness.getText().toString().trim();
-                    if(brightnessString!=null
-                            && TextUtils.isEmpty(brightnessString)==false){
+                    if(TextUtils.isEmpty(brightnessString)==false){
                         setBrightness(Float.parseFloat(brightnessString));
                     }
                     else{
                     }
                     break;
 
-                case R.id.size_factor_ok:
-                    Log.i(TAG,"size_factor_ok has been clicked");
-                    String sizeFactorString=sizeFactor.getText().toString().trim();
-                    if(sizeFactorString!=null
-                            && TextUtils.isEmpty(sizeFactorString)==false){
-                        factor=Integer.parseInt(sizeFactorString);
+                case R.id.brightness_factor_ok:
+                    Log.i(TAG,"brightness_factor_ok: has been clicked");
+                    String bFactorString=brightnessFactor.getText().toString().trim();
+                    if(TextUtils.isEmpty(bFactorString)==false){
+                        bFactor=Integer.parseInt(bFactorString);
                     }
                     break;
 
                 default:
 
             }
+        }
+    }
+
+    private class MySensorEventListener implements SensorEventListener {
+
+        @Override
+        public void onSensorChanged(SensorEvent sensorEvent) {
+            float[] values=sensorEvent.values;
+            switch(sensorEvent.sensor.getType()){
+                case Sensor.TYPE_LIGHT:
+                    brightnessValue=values[0];
+                    break;
+            }
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int i) {
         }
     }
 }
