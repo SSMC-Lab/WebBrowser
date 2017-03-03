@@ -9,4 +9,10 @@
     <string name="brightness">亮度</string>
     <string name="size_factor">尺寸因子</string>
     <string name="brightness_factor">亮度因子</string>
+
+    <string name="calibrate">校准!</string>
+    <string name="reset">重置</string>
+    <string name="currentDistance">距离</string>
+    <string name="showMiddlePoint">中眼点</string>
+    <string name="showEyePoints">眼球点</string>
 </resources>
