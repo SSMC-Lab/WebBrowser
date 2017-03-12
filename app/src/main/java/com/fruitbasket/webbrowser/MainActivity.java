@@ -468,6 +468,13 @@ public class MainActivity extends Activity implements MessageListener {
         }
     }
 
+    //动态改变网页的背景和前景。bg和fg代表背景和前景色，可以是英文颜色名，也可以是rgb值（#RRGGBB）
+    private void changeFgAndBg(String bg,String fg ){
+        webView.getSettings().setJavaScriptEnabled(true);
+        String js ="javascript:"+"var sheet = document.getElementsByTagName('style');if(sheet.length==0) sheet =document.createElement('style');else sheet = document.getElementsByTagName('style')[0];sheet.innerHTML='* { color : "+fg+" !important;background: "+bg+"!important}';document.body.appendChild(sheet);";
+        webView.loadUrl(js);
+    }
+
     private class MySensorEventListener implements SensorEventListener {
 
         @Override
