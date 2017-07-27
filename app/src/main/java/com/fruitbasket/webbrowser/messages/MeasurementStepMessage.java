@@ -1,5 +1,8 @@
 package com.fruitbasket.webbrowser.messages;
 
+import android.graphics.PointF;
+import android.os.Handler;
+
 public class MeasurementStepMessage {
 
 	private float _currentAvgEyeDistance;
@@ -9,6 +12,11 @@ public class MeasurementStepMessage {
 	private float _eyesDistance;
 	private int _measurementsLeft;
 	private float _measuredPositionWithoutMistake;
+
+	private PointF middlePoint;
+	private int realX;
+	private int realY;
+	private int halfEyeDist;
 
 	public float getCurrentAvgEyeDistance() {
 		return _currentAvgEyeDistance;
@@ -65,6 +73,38 @@ public class MeasurementStepMessage {
 	public void setMeasuredPositionWithoutMistake(
 			float measuredPositionWithoutMistake) {
 		_measuredPositionWithoutMistake = measuredPositionWithoutMistake;
+	}
+
+	public PointF getMiddlePoint(){
+		return middlePoint;
+	}
+
+	public void setMiddlePoint(PointF middlePoint){
+		this.middlePoint=middlePoint;
+	}
+
+	public int getRealX(){
+		return realX;
+	}
+
+	public void setRealX(int realX){
+		this.realX=realX;
+	}
+
+	public int getRealY() {
+		return realY;
+	}
+
+	public void setRealY(int realY) {
+		this.realY = realY;
+	}
+
+	public int getHalfEyeDist(){
+		return halfEyeDist;
+	}
+
+	public void setHalfEyeDist(int halfEyeDist){
+		this.halfEyeDist=halfEyeDist;
 	}
 
 }

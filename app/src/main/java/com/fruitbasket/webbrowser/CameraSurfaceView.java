@@ -13,7 +13,6 @@ import android.graphics.Rect;
 import android.hardware.Camera;
 import android.hardware.Camera.Parameters;
 import android.hardware.Camera.Size;
-import android.media.FaceDetector;
 import android.media.FaceDetector.Face;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -28,7 +27,7 @@ import com.fruitbasket.webbrowser.utils.Util;
 
 public class CameraSurfaceView extends SurfaceView implements Callback,
 		Camera.PreviewCallback {
-
+	private static final String TAG="CameraSurfaceView";
 	/**
 	 * Represents the standard height of a peace of a4 paper e.g. 29.7cm
 	 */
@@ -44,8 +43,6 @@ public class CameraSurfaceView extends SurfaceView implements Callback,
 	private float _distanceAtCalibrationPoint = -1;
 
 	private float _currentAvgEyeDistance = -1;
-
-	// private int _facesFoundInMeasurement = -1;
 
 	/**
 	 * in cm
@@ -69,10 +66,12 @@ public class CameraSurfaceView extends SurfaceView implements Callback,
 
 	private Size _previewSize;
 
-	// private boolean _measurementStartet = false;
 	private boolean _calibrated = false;
 	private boolean _calibrating = false;
 	private int _calibrationsLeft = -1;
+
+	private float heightRatio=0f;
+	private float widthRatio=0f;
 
 	public CameraSurfaceView(final Context context, final AttributeSet attrs) {
 		super(context, attrs);
@@ -118,25 +117,27 @@ public class CameraSurfaceView extends SurfaceView implements Callback,
 	@SuppressLint("DrawAllocation")
 	@Override
 	protected void onDraw(final Canvas canvas) {
-		// super.onDraw(canvas);
-
 		if (_foundFace != null) {
-
 			_foundFace.getMidPoint(_middlePoint);
-
-			Log.i("Camera", _middlePoint.x + " : " + _middlePoint.y);
+			Log.d(TAG,"middlePoint= "+_middlePoint.x + " : " + _middlePoint.y);
+            Log.d(TAG,"_foundFace.eyesDistance()= "+_foundFace.eyesDistance());
 
 			// portrait mode!
-			float heightRatio = canvas.getHeight() / (float) _previewSize.width;
+			float heightRatio = canvas.getHeight() / (float) _previewSize.width;//previewSize.width以像素为单位
 			float widthRatio = canvas.getWidth() / (float) _previewSize.height;
-
-			Log.i("Drawcall", _middlePoint.x + " : " + _middlePoint.y);
+			this.heightRatio=heightRatio;
+			this.widthRatio=widthRatio;
+            Log.d(TAG,"previewSize.width= "+_previewSize.width);
+            Log.d(TAG,"previewSize.height= "+_previewSize.height);
+            Log.d(TAG,"canvas.getWidth()= "+canvas.getWidth());
+			Log.d(TAG,"canvas.getHeight()= "+canvas.getHeight());
 
 			int realX = (int) (_middlePoint.x * widthRatio);
 			int realY = (int) (_middlePoint.y * heightRatio);
+			Log.d(TAG,"Drawcall Real :" + realX + " : " + realY);
 
-			Log.i("Drawcall", "Real :" + realX + " : " + realY);
 			int halfEyeDist = (int) (widthRatio * _foundFace.eyesDistance() / 2);
+            Log.d(TAG,"halfEyeDis= "+halfEyeDist);
 
 			if (_showTracking) {
 				// Middle point
@@ -146,7 +147,6 @@ public class CameraSurfaceView extends SurfaceView implements Callback,
 				_trackingRectangle.bottom = realY + RECTANGLE_SIZE;
 				canvas.drawRect(_trackingRectangle, _middlePointColor);
 			}
-
 			if (_showEyes) {
 				// Left eye
 				_trackingRectangle.left = realX - halfEyeDist - RECTANGLE_SIZE;
@@ -190,7 +190,6 @@ public class CameraSurfaceView extends SurfaceView implements Callback,
 		_calibrated = true;
 		_calibrating = false;
 		_currentFaceDetectionThread = null;
-		// _measurementStartet = false;
 
 		_threashold = AVERAGE_THREASHHOLD;
 
@@ -211,8 +210,8 @@ public class CameraSurfaceView extends SurfaceView implements Callback,
 	}
 
 	private void updateMeasurement(final Face currentFace) {
+        Log.i(TAG,"updateMeasurement(Face)");
 		if (currentFace == null) {
-			// _facesFoundInMeasurement--;
 			return;
 		}
 
@@ -246,6 +245,14 @@ public class CameraSurfaceView extends SurfaceView implements Callback,
 		message.setEyesDistance(currentFace.eyesDistance());
 		message.setMeasurementsLeft(_calibrationsLeft);
 		message.setProcessTimeForLastFrame(_processTimeForLastFrame);
+
+		currentFace.getMidPoint(_middlePoint);///
+        message.setMiddlePoint(_middlePoint);///
+		message.setRealX((int)(_middlePoint.x * widthRatio));///
+		message.setRealY((int)(_middlePoint.y*heightRatio));///
+		message.setHalfEyeDist((int) (widthRatio * _foundFace.eyesDistance() / 2));///
+
+        Log.d(TAG,"_currentDistanceToFace= "+_currentDistanceToFace);
 
 		MessageHUB.get().sendMessage(MessageHUB.MEASUREMENT_STEP, message);
 	}
@@ -312,14 +319,6 @@ public class CameraSurfaceView extends SurfaceView implements Callback,
 		}
 	}
 
-	/*
-	 * SURFACE METHODS, TO CREATE AND RELEASE SURFACE THE CORRECT WAY.
-	 * 
-	 * @see
-	 * android.view.SurfaceHolder.Callback#surfaceCreated(android.view.SurfaceHolder
-	 * )
-	 */
-
 	@Override
 	public void surfaceCreated(final SurfaceHolder holder) {
 		synchronized (this) {
@@ -352,8 +351,6 @@ public class CameraSurfaceView extends SurfaceView implements Callback,
 
 		Parameters parameters = mCamera.getParameters();
 		_previewSize = parameters.getPreviewSize();
-		// mCamera.setDisplayOrientation(90);
-		// mCamera.setParameters(parameters);
 
 		// start preview with new settings
 		try {

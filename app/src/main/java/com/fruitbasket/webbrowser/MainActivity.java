@@ -1,16 +1,14 @@
 package com.fruitbasket.webbrowser;
 
 import java.text.DecimalFormat;
-import java.util.List;
 
 import android.app.Activity;
+import android.graphics.PointF;
 import android.hardware.Camera;
-import android.hardware.Camera.Size;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
@@ -26,18 +24,16 @@ import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.fruitbasket.webbrowser.messages.MeasurementStepMessage;
 import com.fruitbasket.webbrowser.messages.MessageHUB;
 import com.fruitbasket.webbrowser.messages.MessageListener;
-import com.google.android.gms.appindexing.Action;
-import com.google.android.gms.appindexing.AppIndex;
-import com.google.android.gms.appindexing.Thing;
-import com.google.android.gms.common.api.GoogleApiClient;
+import com.fruitbasket.webbrowser.utils.JsObject;
 
 
-public class MainActivity extends Activity implements MessageListener {
-    private static final String TAG =MainActivity.class.toString();
+public class MainActivity extends Activity implements MessageListener,SensorEventListener {
+    private static final String TAG ="MainActivity";
 
     public static final String CAM_SIZE_WIDTH = "intent_cam_size_width";
     public static final String CAM_SIZE_HEIGHT = "intent_cam_size_height";
@@ -45,8 +41,6 @@ public class MainActivity extends Activity implements MessageListener {
     public static final String PROBANT_NAME = "intent_probant_name";
     private static final int BRIGHTNESS_FACTOR_DEFAULT=1;
     private static final int FONT_SIZE_FACTOR_DEFAULT=1;
-
-    private SensorManager sensorManager;
 
     private RelativeLayout part1;
     private LinearLayout part2;
@@ -68,7 +62,19 @@ public class MainActivity extends Activity implements MessageListener {
     private Button brightnessFactorOk;
     private TextView backgroundBrightness;
     private TextView brightnessView;
+
+    private EditText etEyeDistance;
+    private TextView tvAngle;
+    private TextView tvMoveDistance;//in pixel
+    private TextView tvEyeDistance;//in pixel
+
     private WebView webView;
+
+    private SensorManager sensorManager;
+    private Sensor sensor;
+    private double lb;
+    private WindowManager.LayoutParams layoutParams ;
+    private int count =0;
 
     private float _currentDevicePosition;
     private int _cameraHeight;
@@ -79,55 +85,45 @@ public class MainActivity extends Activity implements MessageListener {
     private int fontSizeFactor =FONT_SIZE_FACTOR_DEFAULT;///后期可取消这两个值
     private int bFactor =BRIGHTNESS_FACTOR_DEFAULT;///
 
+    private float lastDistToFace=-1f;
+    private int lastRealX=0;
+
     private final static DecimalFormat _decimalFormater = new DecimalFormat("0.0");
-    /**
-     * ATTENTION: This was auto-generated to implement the App Indexing API.
-     * See https://g.co/AppIndexing/AndroidStudio for more information.
-     */
-    private GoogleApiClient client;
 
     @Override
     public void onStart() {
         super.onStart();
-
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        client.connect();
-        AppIndex.AppIndexApi.start(client, getIndexApiAction());
+        Log.i(TAG,"onStart()");
     }
 
-    /**
-     * Abusing the media controls to create a remote control
-     */
-    // ComponentName _headSetButtonReceiver;
-    // AudioManager _audioManager;
     @Override
     public void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Log.i(TAG,"onCreat(Bundle)");
         setContentView(R.layout.activity_main);
+
         initViews();
+        layoutParams = getWindow().getAttributes();
         sensorManager=(SensorManager)getSystemService(SENSOR_SERVICE);
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        client = new GoogleApiClient.Builder(this).addApi(AppIndex.API).build();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-
+        Log.i(TAG,"onResume()");
+        sensorManager.registerListener(this,sensor,SensorManager.SENSOR_DELAY_NORMAL);
         MessageHUB.get().registerListener(this);
-        // _audioManager.registerMediaButtonEventReceiver(_headSetButtonReceiver);
 
-        // 1 for front cam. No front cam ? Not my fault!
-        _cam = Camera.open(1);
+         _cam = Camera.open(1);
         Camera.Parameters param = _cam.getParameters();
 
-        // Find the best suitable camera picture size for your device. Competent
-        // research has shown that a smaller size gets better results up to a
-        // certain point.
-        // http://ieeexplore.ieee.org/xpl/login.jsp?tp=&arnumber=6825217&url=http%3A%2F%2Fieeexplore.ieee.org%2Fiel7%2F6816619%2F6825201%2F06825217.pdf%3Farnumber%3D6825217
-        List<Size> pSize = param.getSupportedPictureSizes();
+        /*
+        Find the best suitable camera picture size for your device. Competent
+        research has shown that a smaller size gets better results up to a
+        certain point.
+        http://ieeexplore.ieee.org/xpl/login.jsp?tp=&arnumber=6825217&url=http%3A%2F%2Fieeexplore.ieee.org%2Fiel7%2F6816619%2F6825201%2F06825217.pdf%3Farnumber%3D6825217
+         */
+        /*List<Size> pSize = param.getSupportedPictureSizes();
         double deviceRatio = (double) this.getResources().getDisplayMetrics().widthPixels
                 / (double) this.getResources().getDisplayMetrics().heightPixels;
 
@@ -147,19 +143,15 @@ public class MainActivity extends Activity implements MessageListener {
 
         Log.d("PInfo", _cameraWidth + " x " + _cameraHeight);
 
-        param.setPreviewSize(_cameraWidth, _cameraHeight);
+        param.setPreviewSize(_cameraWidth, _cameraHeight);*/
         _cam.setParameters(param);
         _mySurfaceView.setCamera(_cam);
-
-        //注册光传感器
-        sensorManager.registerListener(new MySensorEventListener(),
-                sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT),
-                SensorManager.SENSOR_DELAY_GAME);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        Log.i(TAG,"onPause()");
         MessageHUB.get().unregisterListener(this);
         resetCam();
     }
@@ -167,18 +159,20 @@ public class MainActivity extends Activity implements MessageListener {
     @Override
     public void onStop() {
         super.onStop();
-
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        AppIndex.AppIndexApi.end(client, getIndexApiAction());
-        client.disconnect();
+        Log.i(TAG,"onStop()");
+        sensorManager.unregisterListener(this,sensor);
     }
 
     @Override
     public void onMessage(final int messageID, final Object message) {
-
+        Log.i(TAG,"onMessage(int,Object)");
         switch (messageID) {
             case MessageHUB.MEASUREMENT_STEP:
+                /*count++;
+                if(count>=15) {
+                    updateUI((MeasurementStepMessage) message);
+                    count=0;
+                }*/
                 updateUI((MeasurementStepMessage) message);
                 break;
 
@@ -191,7 +185,17 @@ public class MainActivity extends Activity implements MessageListener {
             default:
                 break;
         }
+    }
 
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        Log.i(TAG,"onSensorChanged(SensorEvent)");
+        lb =event.values[0];
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        Log.i(TAG,"onAccuracyChanged(Sensor,int)");
     }
 
     private void initViews() {
@@ -236,13 +240,16 @@ public class MainActivity extends Activity implements MessageListener {
         backgroundBrightness=(TextView)findViewById(R.id.background_brightness);
         brightnessView =(TextView)findViewById(R.id.brightness_view);
 
+        etEyeDistance=(EditText)findViewById(R.id.et_eye_distance);
+        tvMoveDistance=(TextView)findViewById(R.id.tv_move_distance);
+        tvEyeDistance=(TextView)findViewById(R.id.tv_eye_distance);
+        tvAngle=(TextView)findViewById(R.id.tv_angle);
+
         webView = (WebView) findViewById(R.id.web_view);
-        webView.setWebViewClient(new WebViewClient() {
-            public boolean shouldOverrideUrlLoading(WebView view, String url) { //  重写此方法表明点击网页里面的链接还是在当前的webview里跳转，不跳到浏览器那边
-                view.loadUrl(url);
-                return true;
-            }
-        });
+        webView.getSettings().setJavaScriptEnabled(true);
+        webView.setWebViewClient(new WebViewClient());
+        webView.addJavascriptInterface(new JsObject(MainActivity.this),"injectedObject");
+        webView.loadUrl("https://www.v2ex.com/t/350509#reply106");
     }
 
     /**
@@ -257,7 +264,6 @@ public class MainActivity extends Activity implements MessageListener {
 
     /**
      * Sets the current eye distance to the calibration point.
-     *
      * @param v
      */
     public void pressedCalibrate(final View v) {
@@ -291,97 +297,121 @@ public class MainActivity extends Activity implements MessageListener {
      * @param message
      */
     public void updateUI(final MeasurementStepMessage message) {
+        Log.i(TAG,"updateUI(MeasurementStepMessage)");
         _currentDistanceView.setText(_decimalFormater.format(message.getDistToFace()) + " cm");
         float fontRatio = message.getDistToFace() / 29.7f;
         _currentDistanceView.setTextSize(fontRatio * 20);
 
-
-        int size;
-        double ratio1;
-        double ratio2;
         DisplayMetrics metrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
+        double dm = metrics.density*160;
+        double x = Math.pow(metrics.widthPixels/dm,2);
+        double y = Math.pow(metrics.heightPixels/dm,2);
+        final double screenInch = Math.sqrt(x+y);
+        double heightPixel = metrics.heightPixels;
+        double widthPixel = metrics.widthPixels;
+        final double vD0 = screenInch/(Math.sqrt(Math.pow((1.0*widthPixel/heightPixel),2)+1)*widthPixel*Math.tan(1/60.0*Math.PI/180));
+        double vDp = message.getDistToFace();
+        double l0 = lb+30;
+        double lP = lb+Math.pow((vDp/vD0),2)*(l0-lb);
+        layoutParams.screenBrightness =(float)lP/255 >=1? 1:(float)lP/255;
+        getWindow().setAttributes(layoutParams);
 
-        //自动变化屏幕的亮度
-        final double ds=Math.sqrt(
-                Math.pow(metrics.widthPixels/metrics.xdpi,2)+
-                        Math.pow(metrics.heightPixels/metrics.ydpi,2)
-        );
-        Log.i(TAG,"screen inch+="+ds);
-
-        final int cvr=1;///应更改
-        final double vd0=ds/(
-                Math.sqrt(
-                    Math.pow((double)metrics.widthPixels/(double)metrics.heightPixels,2)+1
-                )
-                        *cvr
-                        *Math.tan(1D/60D)
-        );
-        Log.i(TAG,"vd0=="+vd0);
-
-        final double vdp=message.getDistToFace();
-        final int p=1;
-        double lb=brightnessValue;
-        double l0=lb*10D/7D;
-        double lp=lb+Math.pow(vdp/(p*vd0),2)*(l0-lb);
-        Log.i(TAG,"lp=="+lp);
-
-        if(backgroundBrightness!=null){
-            backgroundBrightness.setText(String.valueOf(lb));
-        }
-
-        if(brightnessView!=null){
-            brightnessView.setText(String.valueOf(lp*bFactor));
-        }
-
-        setBrightness((float)(lp* bFactor));
-
-        //更新网页浏览器的字体大小
-        ratio1=0.47;//calibri
-        ratio2=96.0/(double)(metrics.densityDpi);
-        size=(int)(((1/Math.sqrt(3))*message.getDistToFace())/(ratio1*ratio2));
-        Log.d(TAG,"dpi="+metrics.densityDpi);
-        Log.d(TAG,"ratio2="+ratio2);
-        Log.d(TAG,"size="+size);
-
-        if(sizeView!=null){
-            sizeView.setText(String.valueOf(size));
-        }
 
         if (webView != null) {
-            WebSettings settings = webView.getSettings();
-            settings.setTextZoom(size* fontSizeFactor);
+            int fontsize =(int)(7.5*message.getDistToFace()*metrics.densityDpi/(6000*2.54*0.45));
+            if(fontsize>0) {
+                changeFontSizeAndContrast(fontsize);
+                Toast.makeText(MainActivity.this, "fontsize: " + fontsize, Toast.LENGTH_SHORT).show();
+            }
         }
         else{
             Log.d(TAG,"webView is null");
         }
+
+        //计算角度
+        double angle=0;
+        if(lastDistToFace>0){
+            String string;
+            if(TextUtils.isEmpty(string=etEyeDistance.getText().toString().trim())==false){
+                float eyeDistance=Float.valueOf(string);
+                angle=Math.atan(eyeDistance*Math.abs(message.getRealX()-lastRealX)/(message.getHalfEyeDist()*2)/message.getDistToFace());
+                Log.d(TAG,"message.getRealX()= "+message.getRealX());
+                Log.d(TAG,"lastRealX= "+lastRealX);
+                Log.d(TAG,"eye distance(p)= "+message.getHalfEyeDist()*2);
+                Log.d(TAG,"distance to face(cm)= "+message.getDistToFace());
+                tvMoveDistance.setText("move dist(p): "+Math.abs(message.getRealX()-lastRealX));
+                tvEyeDistance.setText("eye dist(p): "+message.getHalfEyeDist()*2);
+            }
+        }
+        lastDistToFace=message.getDistToFace();
+        lastRealX=message.getRealX();
+
+        Log.i(TAG,"angle= "+angle);
+        tvAngle.setText("angle: "+String.valueOf(angle));
     }
 
     private void resetCam() {
         _mySurfaceView.reset();
-
         _cam.stopPreview();
         _cam.setPreviewCallback(null);
         _cam.release();
     }
 
     /**
-     * ATTENTION: This was auto-generated to implement the App Indexing API.
-     * See https://g.co/AppIndexing/AndroidStudio for more information.
+     * 动态改变网页的背景和前景。bg和fg代表背景和前景色，可以是英文颜色名，也可以是rgb值（#RRGGBB）
+     * @param bg
+     * @param fg
      */
-    public Action getIndexApiAction() {
-        Thing object = new Thing.Builder()
-                .setName("Main Page") // TODO: Define a title for the content shown.
-                // TODO: Make sure this auto-generated URL is correct.
-                .setUrl(Uri.parse("http://[ENTER-YOUR-URL-HERE]"))
-                .build();
-        return new Action.Builder(Action.TYPE_VIEW)
-                .setObject(object)
-                .setActionStatus(Action.STATUS_TYPE_COMPLETED)
-                .build();
+    private void changeFgAndBg(String bg,String fg ){
+        webView.getSettings().setJavaScriptEnabled(true);
+        String js ="javascript:"+"var sheet = document.getElementsByTagName('style');if(sheet.length==0) sheet =document.createElement('style');else sheet = document.getElementsByTagName('style')[0];sheet.innerHTML='* { color : "+fg+" !important;background: "+bg+"!important}';document.body.appendChild(sheet);";
+        webView.loadUrl(js);
     }
 
+    /**
+     * 动态改变网页的字体大小
+     * @param fontsize
+     */
+    private void changeFontSize(int fontsize){
+        webView.getSettings().setJavaScriptEnabled(true);
+        String js = "javascript:(function(){ var css = '* { font-size : "+ fontsize + "px !important ; }';var style = document.getElementsByTagName('style');if(style.length==0){style = document.createElement('style');}else{style = document.getElementsByTagName('style')[0];}        if (style.styleSheet){ style.style.styleSheet.cssText=css;}else{style.appendChild(document.createTextNode(css));} document.getElementsByTagName('head')[0].appendChild(style);})()";
+        //String js ="javascript:"+"var sheet = document.getElementsByTagName('style');if(sheet.length==0) sheet =document.createElement('style');else sheet = document.getElementsByTagName('style')[0];sheet.innerHTML='* { font-size : "+fontsize+"px !important;}；document.body.appendChild(sheet)';document.body.appendChild(sheet);";
+        webView.loadUrl(js);
+    }
 
+    private void changeFontSizeAndContrast(int fontsize){
+        String js = "javascript:(function(){  var contrast = -0.0425*"+fontsize+"+0.85; " +
+                "    var body = document.getElementsByTagName('body')[0]; " +
+                "var bgL =0.2126*255+0.7152*255+0.0722*255;"+
+                "    var eps = 1; " +
+                "    var fgr,fgg,fgb,result,fgl; " +
+                "    console.log('bgL'+bgL); " +
+                "    for(var r = 0;r<=255;r++){ " +
+                "        for (var g =0;g<=255;g++){ " +
+                "            for(var b = 0; b<=255;b++){ " +
+                "                fgL =0.2126*r+0.7152*g+0.0722*b; " +
+                "                result =Math.abs(contrast-Math.abs(fgL-bgL)/Math.max(fgL,bgL)); " +
+                "                if(result<eps){ " +
+                "                    eps = result; " +
+                "                    fgr = r; " +
+                "                    fgg = g; " +
+                "                    fgb = b; " +
+                "                } " +
+                "            } " +
+                "        } " +
+                "    };" +
+
+                "var sheet = document.getElementsByTagName('style'); " +
+                "    if(sheet.length==0)  " +
+                "    sheet =document.createElement('style'); " +
+                "    else  " +
+                "    sheet = document.getElementsByTagName('style')[0]; " +
+                "    sheet.innerHTML=' * { color : rgb('+fgr+','+fgg+','+fgb+') !important; background: black !important;font-size: "+fontsize+"px !important}';  " +
+                "    document.body.appendChild(sheet);alert('finish');}" +
+                " )()";
+        webView.loadUrl(js);
+    }
 
     /**
      *
