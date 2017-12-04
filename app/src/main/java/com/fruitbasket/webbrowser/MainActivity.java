@@ -319,7 +319,7 @@ public class MainActivity extends Activity implements MessageListener,SensorEven
 
 
         if (webView != null) {
-            int fontsize =(int)(7.5*message.getDistToFace()*metrics.densityDpi/(6000*2.54*0.45));
+            int fontsize =(int)(5.5*message.getDistToFace()*metrics.densityDpi/(6000*2.54*0.45));
             if(fontsize>0) {
                 changeFontSizeAndContrast(fontsize);
                 Toast.makeText(MainActivity.this, "fontsize: " + fontsize, Toast.LENGTH_SHORT).show();
@@ -383,15 +383,15 @@ public class MainActivity extends Activity implements MessageListener,SensorEven
     private void changeFontSizeAndContrast(int fontsize){
         String js = "javascript:(function(){  var contrast = -0.0425*"+fontsize+"+0.85; " +
                 "    var body = document.getElementsByTagName('body')[0]; " +
-                "var bgL =0.2126*255+0.7152*255+0.0722*255;"+
+                "var bgL =0;"+
                 "    var eps = 1; " +
                 "    var fgr,fgg,fgb,result,fgl; " +
                 "    console.log('bgL'+bgL); " +
-                "    for(var r = 0;r<=255;r++){ " +
-                "        for (var g =0;g<=255;g++){ " +
-                "            for(var b = 0; b<=255;b++){ " +
+                "    for(var b = 0;b<=255;b++){ " +
+                "        for (var r =0;r<=255;r++){ " +
+                "            for(var  g= 0; g<=255;g++){ " +
                 "                fgL =0.2126*r+0.7152*g+0.0722*b; " +
-                "                result =Math.abs(contrast-Math.abs(fgL-bgL)/Math.max(fgL,bgL)); " +
+                "                result =Math.abs(contrast-Math.abs(fgL/255)); " +
                 "                if(result<eps){ " +
                 "                    eps = result; " +
                 "                    fgr = r; " +
